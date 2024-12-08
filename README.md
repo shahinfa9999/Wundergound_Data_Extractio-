@@ -22,7 +22,7 @@ This project is a Weather Data Extractor application built using Python. It fetc
 
 1. Clone the repository:
    ```sh
-   git clone https://github.com/shahinfa9999/Wundergound_Data_Extraction.git
+   git clone https://github.com/shahinfa9999/Wundergound_Data_Extractio-.git
    cd your-repository-name
 
 2. Create the required packages:
