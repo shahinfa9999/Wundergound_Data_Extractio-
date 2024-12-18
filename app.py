@@ -8,6 +8,9 @@ import pandas as pd
 import re
 import customtkinter as ctk
 from tkinter import filedialog
+from tkinter import messagebox
+import os
+
 
 def extract_numeric_values(data):
     numeric_values = []
@@ -53,7 +56,12 @@ def extract_weather_data(soup):
     return headers, rows
 
 def create_database():
-    conn = sqlite3.connect('weather_data.db')
+    # Create the database in the user's home directory
+    home_dir = os.path.expanduser("~")
+    db_dir = os.path.join(home_dir, "WeatherData")
+    os.makedirs(db_dir, exist_ok=True)  # Create the directory if it does not exist
+    db_path = os.path.join(db_dir, 'weather_data.db')
+    conn = sqlite3.connect(db_path)
     
     c = conn.cursor()
     
@@ -150,6 +158,7 @@ def save_to_spreadsheet(filtered_data, headers, filename='filtered_weather_data.
     # Save the workbook
     wb.save(filename)
     print(f"Filtered data saved to {filename}")
+
 def save_all_data_to_spreadsheet(conn, headers, filename='Erie2.xlsx', start_row=7, start_col=2):
     # Load the existing workbook
     wb = openpyxl.load_workbook(filename)
@@ -183,8 +192,6 @@ def save_all_data_to_spreadsheet(conn, headers, filename='Erie2.xlsx', start_row
     column_mapping = {
         'Time': 'B',
         'Temperature': 'BU',
-        'Dew_Point': 'D',
-        'Humidity': 'E',
         'Wind': 'BT',  # direction
         'Speed': 'BQ',  # wind speed
         'Gust': 'BR',  # wind gust
@@ -200,72 +207,74 @@ def save_all_data_to_spreadsheet(conn, headers, filename='Erie2.xlsx', start_row
         for field, col_letter in column_mapping.items():
             col_num = openpyxl.utils.column_index_from_string(col_letter)
             cell = ws.cell(row=row_num, column=col_num)
-            if field in ['Speed', 'Gust', 'Temperature']:
+            if field in ['Speed', 'Gust', 'Temperature'] and cell.value is None:
                 numeric_value = re.sub(r'[^\d.-]', '', row[headers.index(field)])
                 numeric_value = float(numeric_value) if numeric_value else None
-                cell.value = numeric_value
+                cell.value = (numeric_value)//1
                 if field == 'Speed':
-                    speed_value = numeric_value
+                    speed_value = (numeric_value)
                     print(f"Speed: {speed_value}")
                 elif field == 'Gust':
-                    gust_value = numeric_value
+                    gust_value = (numeric_value)
                     print(f"Gust: {gust_value}")
-            elif field == "Wind":
+            elif field == "Wind" and cell.value is None:
                 wind_direction = row[headers.index(field)]
                 if wind_direction == "N":
                     cell.value = 0
                 elif wind_direction == "NNE":
-                    cell.value = 22.5
+                    cell.value = 22
                 elif wind_direction == "NE":
                     cell.value = 45
                 elif wind_direction == "ENE":
-                    cell.value = 67.5
+                    cell.value = 67
                 elif wind_direction == "E":
                     cell.value = 90
                 elif wind_direction == "ESE":
-                    cell.value = 112.5
+                    cell.value = 112
                 elif wind_direction == "SE":
                     cell.value = 135
                 elif wind_direction == "SSE":
-                    cell.value = 157.5
+                    cell.value = 157
                 elif wind_direction == "S":
                     cell.value = 180
                 elif wind_direction == "SSW":
-                    cell.value = 202.5
+                    cell.value = 202
                 elif wind_direction == "SW":
                     cell.value = 225
                 elif wind_direction == "WSW":
-                    cell.value = 247.5
+                    cell.value = 247
                 elif wind_direction == "W":
                     cell.value = 270
                 elif wind_direction == "WNW":
-                    cell.value = 292.5
+                    cell.value = 292
                 elif wind_direction == "NW":
                     cell.value = 315
                 elif wind_direction == "NNW":
-                    cell.value = 337.5
+                    cell.value = 337
                 else:
                     cell.value = None  # Handle unexpected values
             elif field == "Precip_Rate":
-                rain_numeric_value = re.sub(r'[^\d.-]', '', row[headers.index(field)])
-                rain_numeric_value = float(rain_numeric_value) if rain_numeric_value else 0.0
-                print(f"Rain numeric value: {rain_numeric_value}")
-                if rain_numeric_value == 0.0:
-                    cell.value = "No Rain"
-                elif rain_numeric_value <= 0.1:
-                    cell.value = "Light Rain"
-                else:
-                    cell.value = "Heavy Rain"
+                if cell.value == None:
+                    rain_numeric_value = re.sub(r'[^\d.-]', '', row[headers.index(field)])
+                    rain_numeric_value = float(rain_numeric_value) if rain_numeric_value else 0.0
+                    print(f"Rain numeric value: {rain_numeric_value}")
+                    if rain_numeric_value == 0.0:
+                        cell.value = "No Rain"
+                    elif rain_numeric_value <= 0.1:
+                        cell.value = "Light Rain"
+                    else:
+                        cell.value = "Heavy Rain"
             else:
-                cell.value = row[headers.index(field)]
+                continue 
+                #cell.value = row[headers.index(field)]
 
         # Calculate the value for column BS based on Speed and Gust
         if speed_value is not None and gust_value is not None:
             print(f"Calculating BS value for Speed: {speed_value} and Gust: {gust_value}")
             if speed_value < 15:
-                bs_value = speed_value
+                bs_value = speed_value//1
             else:
-                bs_value = speed_value * 2 / 3 + gust_value * 1 / 3
+                bs_value = (speed_value * 2 / 3 + gust_value * 1 / 3)//1
 
             bs_col_num = openpyxl.utils.column_index_from_string('BS')
             bs_cell = ws.cell(row=row_num, column=bs_col_num)
@@ -273,28 +282,37 @@ def save_all_data_to_spreadsheet(conn, headers, filename='Erie2.xlsx', start_row
     # Save the workbook
     wb.save(filename)
     print(f"All data saved to {filename}")
-    
+
 def main():
     def run_script():
-        url = url_entry.get().strip().strip('"')
-        filename = filename_entry.get().strip()
-        
-        # Fetch and parse the HTML content
-        soup = fetch_html_content(url)
+        try:
+            url = url_entry.get().strip().strip('"')
+            filename = filename_entry.get().strip()
+            
+            # Fetch and parse the HTML content
+            soup = fetch_html_content(url)
 
-        # Extract the weather data from the soup
-        headers, rows = extract_weather_data(soup)
+            # Extract the weather data from the soup
+            headers, rows = extract_weather_data(soup)
 
-        # Create the database and insert the observations
-        conn = create_database()
-        insert_observations(conn, headers, rows)
+            # Create the database and insert the observations
+            conn = create_database()
+            insert_observations(conn, headers, rows)
 
-        # Query and print the sorted data
-        sorted_data = query_sorted_data(conn)
+            # Query and print the sorted data
+            sorted_data = query_sorted_data(conn)
 
-        print(extract_45_min_intervals(conn, "06:00"))
+            print(extract_45_min_intervals(conn, "06:00"))
 
-        save_all_data_to_spreadsheet(conn, headers, filename=filename, start_row=7, start_col=2)
+            save_all_data_to_spreadsheet(conn, headers, filename=filename, start_row=7, start_col=2)
+
+            # Show success message
+            messagebox.showinfo("Success", "Data extraction and saving completed successfully!")
+
+        except Exception as e:
+            # Show error message
+            messagebox.showerror("Error", f"An error occurred: {e}")
+
     def browse_file():
         filename = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx")])
         if filename:
@@ -316,6 +334,7 @@ def main():
     ctk.CTkButton(app, text="Run", command=run_script).pack(pady=20)
 
     app.mainloop()
+
 
 if __name__ == "__main__":
     main()
